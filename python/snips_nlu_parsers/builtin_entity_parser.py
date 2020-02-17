@@ -1,4 +1,5 @@
 import json
+import time
 from _ctypes import byref
 from builtins import bytes, str
 from ctypes import c_char_p, c_int, c_void_p, string_at
@@ -38,7 +39,7 @@ class BuiltinEntityParser(object):
                                    "builtin entity parser")
         return cls(parser)
 
-    def parse(self, text, scope=None, max_alternative_resolved_values=5):
+    def parse(self, text, scope=None, max_alternative_resolved_values=5, reference_timestamp=None):
         """Extracts builtin entities from *text*
 
         Args:
@@ -50,6 +51,8 @@ class BuiltinEntityParser(object):
             max_alternative_resolved_values (int, optional): Maximum number of
                 alternative resolved values to return in addition to the top
                 one (default 5).
+            reference_timestamp (naive timestamp): base reference time for
+                rustling
 
         Returns:
             list of dict: The list of extracted entities
@@ -67,9 +70,16 @@ class BuiltinEntityParser(object):
             arr.data = (c_char_p * len(scope))(*scope)
             scope = byref(arr)
 
+        if reference_timestamp is None:
+            reference_timestamp = time.time()
+        try:
+            reference_timestamp = int(reference_timestamp)
+        except ValueError:
+            raise ValueError("Reference_timestamp must be castable to int")
+
         with string_pointer(c_char_p()) as ptr:
             exit_code = lib.snips_nlu_parsers_extract_builtin_entities_json(
-                self._parser, text.encode("utf8"), scope,
+                self._parser, text.encode("utf8"), reference_timestamp, scope,
                 max_alternative_resolved_values, byref(ptr))
             check_ffi_error(exit_code, "Something went wrong when extracting "
                                        "builtin entities")

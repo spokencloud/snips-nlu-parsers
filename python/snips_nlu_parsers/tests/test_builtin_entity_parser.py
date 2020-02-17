@@ -12,6 +12,19 @@ BUILTIN_PARSER_NO_GAZETTEER_PATH = ROOT_DIR / "data" / "tests" / \
 
 
 class TestBuiltinEntityParser(unittest.TestCase):
+    def test_should_parse_with_reference_time(self):
+        reference_time = 0
+        expected_value = '1970-01-01 08:00:00'
+        parser = BuiltinEntityParser.build("en")
+        res = parser.parse("at eight", reference_timestamp=reference_time)
+
+        return_datetime = res[0]['entity']['value']
+
+        self.assertEqual(
+            return_datetime[:len(expected_value)],
+            expected_value
+        )
+
     def test_should_parse_without_scope(self):
         # Given
         parser = BuiltinEntityParser.build("en")
@@ -42,7 +55,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
         scope = ["snips/duration", "snips/temperature"]
 
         # When
-        res = parser.parse("Raise to sixty two", scope)
+        res = parser.parse("Raise to sixty two", scope=scope)
 
         # Then
         expected_result = [
@@ -69,7 +82,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
         scope = ["snips/musicArtist"]
 
         # When
-        res = parser.parse("I want to listen to the stones please!", scope)
+        res = parser.parse("I want to listen to the stones please!", scope=scope)
 
         # Then
         expected_result = [
@@ -171,7 +184,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
             persisted_path = str(tmpdir / "persisted_builtin_parser")
             parser.persist(persisted_path)
             loaded_parser = BuiltinEntityParser.from_path(persisted_path)
-        res = loaded_parser.parse("Raise the temperature to 9 degrees", None)
+        res = loaded_parser.parse("Raise the temperature to 9 degrees", scope=None)
 
         # Then
         expected_result = [
@@ -195,7 +208,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
             BUILTIN_PARSER_NO_GAZETTEER_PATH)
 
         # When
-        res = parser.parse("Raise the temperature to 9 degrees", None)
+        res = parser.parse("Raise the temperature to 9 degrees", scope=None)
 
         # Then
         expected_result = [
@@ -223,7 +236,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
             persisted_path = str(tmpdir / "persisted_builtin_parser")
             parser.persist(persisted_path)
             loaded_parser = BuiltinEntityParser.from_path(persisted_path)
-        res = loaded_parser.parse("I want to listen to the stones", None)
+        res = loaded_parser.parse("I want to listen to the stones", scope=None)
 
         # Then
         expected_result = [
@@ -245,7 +258,7 @@ class TestBuiltinEntityParser(unittest.TestCase):
         parser = BuiltinEntityParser.from_path(BUILTIN_PARSER_PATH)
 
         # When
-        res = parser.parse("I want to listen to the stones", None)
+        res = parser.parse("I want to listen to the stones", scope=None)
 
         # Then
         expected_result = [
@@ -282,4 +295,4 @@ class TestBuiltinEntityParser(unittest.TestCase):
 
         # When/Then
         with self.assertRaises(TypeError):
-            parser.parse("Raise to sixty", scope)
+            parser.parse("Raise to sixty", scope=scope)
