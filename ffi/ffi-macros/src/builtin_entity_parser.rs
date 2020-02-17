@@ -4,6 +4,7 @@ use ffi_utils::{convert_to_c_string, CReprOf, CStringArray, RawPointerConverter}
 use snips_nlu_ontology::{BuiltinEntity, BuiltinEntityKind, BuiltinGazetteerEntityKind};
 use snips_nlu_ontology_ffi_macros::{CBuiltinEntity, CBuiltinEntityArray};
 use snips_nlu_parsers::{BuiltinEntityParser, BuiltinEntityParserLoader, EntityValue};
+use std::i64;
 use std::ffi::CStr;
 use std::slice;
 
@@ -85,6 +86,7 @@ pub fn load_builtin_entity_parser(
 pub fn extract_builtin_entity_c(
     ptr: *const CBuiltinEntityParser,
     sentence: *const libc::c_char,
+    reference_time: i64,
     filter_entity_kinds: *const CStringArray,
     max_alternative_resolved_values: libc::c_uint,
     results: *mut *const CBuiltinEntityArray,
@@ -92,6 +94,7 @@ pub fn extract_builtin_entity_c(
     let c_entities = extract_builtin_entity(
         ptr,
         sentence,
+        reference_time,
         filter_entity_kinds,
         max_alternative_resolved_values,
     )?
@@ -110,6 +113,7 @@ pub fn extract_builtin_entity_c(
 pub fn extract_builtin_entity_json(
     ptr: *const CBuiltinEntityParser,
     sentence: *const libc::c_char,
+    reference_time: i64,
     filter_entity_kinds: *const CStringArray,
     max_alternative_resolved_values: libc::c_uint,
     results: *mut *const libc::c_char,
@@ -117,6 +121,7 @@ pub fn extract_builtin_entity_json(
     let entities = extract_builtin_entity(
         ptr,
         sentence,
+        reference_time,
         filter_entity_kinds,
         max_alternative_resolved_values,
     )?;
@@ -131,6 +136,7 @@ pub fn extract_builtin_entity_json(
 pub fn extract_builtin_entity(
     ptr: *const CBuiltinEntityParser,
     sentence: *const libc::c_char,
+    reference_time: i64,
     filter_entity_kinds: *const CStringArray,
     max_alternative_resolved_values: libc::c_uint,
 ) -> Result<Vec<BuiltinEntity>> {
@@ -161,6 +167,7 @@ pub fn extract_builtin_entity(
 
     parser.extract_entities(
         sentence,
+        Some(reference_timestamp),
         opt_filters,
         max_alternative_resolved_values as usize,
     )
