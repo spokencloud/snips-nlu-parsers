@@ -1,19 +1,21 @@
+use std::fs;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+use failure::{format_err, ResultExt};
+pub use gazetteer_entity_parser::EntityValue;
+use itertools::Itertools;
+use rustling_ontology::{build_parser, Interval, Local, Moment, OutputKind, Parser as RustlingParser, ResolverContext, TimeZone};
+use serde::{Deserialize, Serialize};
+use snips_nlu_ontology::*;
+use snips_nlu_utils::string::{convert_to_byte_range, convert_to_char_index};
+
 use crate::conversion::*;
 use crate::errors::*;
 use crate::gazetteer_parser::GazetteerParser;
 use crate::parsable::ParsableLanguage;
 use crate::utils::{get_ranges_mapping, NON_SPACE_REGEX, NON_SPACE_SEPARATED_LANGUAGES};
-use failure::{format_err, ResultExt};
-pub use gazetteer_entity_parser::EntityValue;
-use itertools::Itertools;
-use rustling_ontology::{build_parser, OutputKind, Parser as RustlingParser, ResolverContext};
-use serde::{Deserialize, Serialize};
-use snips_nlu_ontology::*;
-use snips_nlu_utils::string::{convert_to_byte_range, convert_to_char_index};
-use std::fs;
-use std::ops::Range;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 pub struct BuiltinEntityParser {
     gazetteer_parser: Option<GazetteerParser<BuiltinGazetteerEntityKind>>,
@@ -71,18 +73,21 @@ impl BuiltinEntityParser {
     pub fn extract_entities(
         &self,
         sentence: &str,
+        reference_timestamp: Option<i64>,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
         if NON_SPACE_SEPARATED_LANGUAGES.contains(&self.language) {
             self._extract_entities_for_non_space_separated(
                 sentence,
+                reference_timestamp,
                 filter_entity_kinds,
                 max_alternative_resolved_values,
             )
         } else {
             self._extract_entities(
                 sentence,
+                reference_timestamp,
                 filter_entity_kinds,
                 max_alternative_resolved_values,
             )
@@ -92,10 +97,17 @@ impl BuiltinEntityParser {
     fn _extract_entities(
         &self,
         sentence: &str,
+        reference_timestamp: Option<i64>,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
-        let context = ResolverContext::default();
+        let context = reference_timestamp
+            .map(|ts|
+                ResolverContext::new(
+                    Interval::starting_at(Moment(Local.timestamp(ts, 0)),
+                                          rustling_ontology::Grain::Second))
+            )
+            .unwrap_or_else(|| ResolverContext::default());
         let rustling_output_kinds = self
             .rustling_entity_kinds
             .iter()
@@ -144,6 +156,7 @@ impl BuiltinEntityParser {
     pub fn _extract_entities_for_non_space_separated(
         &self,
         sentence: &str,
+        reference_timestamp: Option<i64>,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
@@ -166,6 +179,7 @@ impl BuiltinEntityParser {
         Ok(self
             ._extract_entities(
                 &*joined_sentence,
+                reference_timestamp,
                 filter_entity_kinds,
                 max_alternative_resolved_values,
             )?
@@ -210,7 +224,7 @@ impl BuiltinEntityParser {
     pub fn extend_gazetteer_entity(
         &mut self,
         entity_kind: BuiltinGazetteerEntityKind,
-        entity_values: impl Iterator<Item = EntityValue>,
+        entity_values: impl Iterator<Item=EntityValue>,
     ) -> Result<()> {
         self.gazetteer_parser
             .as_mut()
@@ -278,8 +292,8 @@ impl BuiltinEntityParser {
 
 #[cfg(test)]
 mod test {
-    use snips_nlu_ontology::language::Language;
     use snips_nlu_ontology::IntoBuiltinEntityKind;
+    use snips_nlu_ontology::language::Language;
     use snips_nlu_ontology::SlotValue::InstantTime;
     use tempfile::tempdir;
 
@@ -290,11 +304,14 @@ mod test {
 
     #[test]
     fn test_should_parse_grammar_entities() {
+        let base_timestamp = Some(1360639800);
         let parser = BuiltinEntityParserLoader::new(Language::EN).load().unwrap();
         assert_eq!(
             vec![BuiltinEntityKind::Number, BuiltinEntityKind::Date],
             parser
-                .extract_entities("Book me a restaurant for two people tomorrow", None, 0)
+                .extract_entities(
+                    "Book me a restaurant for two people tomorrow",
+                    base_timestamp, None, 0)
                 .unwrap()
                 .iter()
                 .map(|e| e.entity_kind)
@@ -305,7 +322,7 @@ mod test {
             vec![BuiltinEntityKind::Datetime],
             parser
                 .extract_entities(
-                    "Book me a restaurant for tomorrow",
+                    "Book me a restaurant for tomorrow", base_timestamp,
                     Some(&[BuiltinEntityKind::Datetime]),
                     0,
                 )
@@ -318,7 +335,9 @@ mod test {
         assert_eq!(
             vec![BuiltinEntityKind::Datetime],
             parser
-                .extract_entities("Book me a restaurant for tomorrow at 8pm", None, 0)
+                .extract_entities("Book me a restaurant for tomorrow at 8pm",
+                                  base_timestamp,
+                                  None, 0)
                 .unwrap()
                 .iter()
                 .map(|e| e.entity_kind)
@@ -329,9 +348,9 @@ mod test {
             vec![BuiltinEntityKind::Date],
             parser
                 .extract_entities(
-                    "Book me a restaurant for tomorrow",
+                    "Book me a restaurant for tomorrow", base_timestamp,
                     Some(&[BuiltinEntityKind::Date]),
-                    0
+                    0,
                 )
                 .unwrap()
                 .iter()
@@ -342,7 +361,8 @@ mod test {
         assert_eq!(
             vec![BuiltinEntityKind::TimePeriod],
             parser
-                .extract_entities("Book the meeting room from 10am to 11am", None, 0)
+                .extract_entities("Book the meeting room from 10am to 11am", base_timestamp,
+                                  None, 0)
                 .unwrap()
                 .iter()
                 .map(|e| e.entity_kind)
@@ -353,9 +373,9 @@ mod test {
             vec![BuiltinEntityKind::Time, BuiltinEntityKind::Time],
             parser
                 .extract_entities(
-                    "Book the meeting room from 10am to 11am",
+                    "Book the meeting room from 10am to 11am", base_timestamp,
                     Some(&[BuiltinEntityKind::Time]),
-                    0
+                    0,
                 )
                 .unwrap()
                 .iter()
@@ -366,7 +386,7 @@ mod test {
         assert_eq!(
             vec![BuiltinEntityKind::Duration],
             parser
-                .extract_entities("The weather during two weeks", None, 0)
+                .extract_entities("The weather during two weeks", base_timestamp, None, 0)
                 .unwrap()
                 .iter()
                 .map(|e| e.entity_kind)
@@ -376,7 +396,7 @@ mod test {
         assert_eq!(
             vec![BuiltinEntityKind::Percentage],
             parser
-                .extract_entities("Set light to ten percents", None, 0)
+                .extract_entities("Set light to ten percents", base_timestamp, None, 0)
                 .unwrap()
                 .iter()
                 .map(|e| e.entity_kind)
@@ -387,7 +407,7 @@ mod test {
             vec![BuiltinEntityKind::AmountOfMoney],
             parser
                 .extract_entities(
-                    "I would like to do a bank transfer of ten euros for my friends",
+                    "I would like to do a bank transfer of ten euros for my friends", base_timestamp,
                     None,
                     0,
                 )
@@ -400,9 +420,10 @@ mod test {
 
     #[test]
     fn test_should_parser_builtin_entities_with_empty_scope() {
+        let base_timestamp = Some(1360639800);
         let parser = BuiltinEntityParserLoader::new(Language::EN).load().unwrap();
         let entities = parser
-            .extract_entities("tomorrow morning", Some(&[]), 0)
+            .extract_entities("tomorrow morning", base_timestamp, Some(&[]), 0)
             .unwrap();
         assert_eq!(Vec::<BuiltinEntity>::new(), entities);
     }
@@ -411,6 +432,7 @@ mod test {
     fn test_should_parse_gazetteer_entities() {
         // Given
         let language = Language::FR;
+        let base_timestamp = Some(1360639800);
         let parser = BuiltinEntityParserLoader::new(language)
             .use_gazetter_parser(test_path().join("builtin_gazetteer_parser"))
             .load()
@@ -418,10 +440,10 @@ mod test {
 
         // When
         let above_threshold_entity = parser
-            .extract_entities("Je voudrais écouter the stones s'il vous plaît", None, 5)
+            .extract_entities("Je voudrais écouter the stones s'il vous plaît", base_timestamp, None, 5)
             .unwrap();
         let below_threshold_entity = parser
-            .extract_entities("Je voudrais écouter les stones", None, 5)
+            .extract_entities("Je voudrais écouter les stones", base_timestamp, None, 5)
             .unwrap();
 
         // Then
@@ -442,6 +464,7 @@ mod test {
     fn test_should_parse_extended_gazetteer_entities() {
         // Given
         let language = Language::EN;
+        let base_timestamp = Some(1360639800);
         let mut parser = BuiltinEntityParserLoader::new(language)
             .use_gazetter_parser(test_path().join("builtin_gazetteer_parser"))
             .load()
@@ -453,13 +476,13 @@ mod test {
                     raw_value: "my extended artist".to_string(),
                     resolved_value: "My resolved extended artist".to_string(),
                 }]
-                .into_iter(),
+                    .into_iter(),
             )
             .unwrap();
 
         // When
         let entities = parser
-            .extract_entities("I want to listen to my extended artist please", None, 5)
+            .extract_entities("I want to listen to my extended artist please", base_timestamp, None, 5)
             .unwrap();
 
         // Then
@@ -488,7 +511,7 @@ mod test {
                 raw_value: "my extended artist".to_string(),
                 resolved_value: "My resolved extended artist".to_string(),
             }]
-            .into_iter(),
+                .into_iter(),
         );
 
         // Then
@@ -499,6 +522,7 @@ mod test {
     fn test_should_parse_gazetteer_entities_with_alternatives() {
         // Given
         let language = Language::FR;
+        let base_timestamp = Some(1360639800);
         let mut parser = BuiltinEntityParserLoader::new(language)
             .use_gazetter_parser(test_path().join("builtin_gazetteer_parser"))
             .load()
@@ -517,13 +541,13 @@ mod test {
                         resolved_value: "The Loving Stones".to_string(),
                     },
                 ]
-                .into_iter(),
+                    .into_iter(),
             )
             .unwrap();
 
         // When
         let parsed_entity = parser
-            .extract_entities("Je voudrais écouter the stones s'il vous plaît", None, 1)
+            .extract_entities("Je voudrais écouter the stones s'il vous plaît", base_timestamp, None, 1)
             .unwrap();
 
         // Then
@@ -543,6 +567,7 @@ mod test {
 
     #[test]
     fn test_should_parse_builtin_entities_for_non_space_separated_languages() {
+        let base_timestamp = Some(1360639800);
         let parser = BuiltinEntityParserLoader::new(Language::JA).load().unwrap();
         let expected_datetime_value = InstantTimeValue {
             value: "2013-02-10 00:00:00 +01:00".to_string(),
@@ -561,6 +586,7 @@ mod test {
         let parsed_entities = parser
             .extract_entities(
                 " の カリフォル  二 千 十三 年二 月十 日  ニア州の天気予報は？",
+                base_timestamp,
                 None,
                 0,
             )
@@ -583,6 +609,7 @@ mod test {
             parser
                 .extract_entities(
                     "二 千 十三 年二 月十 日の カリフォルニア州の天気予報は？",
+                    base_timestamp,
                     None,
                     0,
                 )
@@ -592,12 +619,17 @@ mod test {
 
     #[test]
     fn test_entity_examples_should_be_parsed() {
+        // "2013-02-12T04:30:00+00:00"
+        let base_timestamp = Some(1360639800);
         for language in Language::all() {
             let parser = BuiltinEntityParserLoader::new(*language).load().unwrap();
             for entity_kind in GrammarEntityKind::all() {
                 for example in entity_kind.examples(*language) {
                     let results = parser
-                        .extract_entities(example, Some(&[entity_kind.into_builtin_kind()]), 5)
+                        .extract_entities(
+                            example, base_timestamp,
+                            Some(&[entity_kind.into_builtin_kind()]),
+                            5)
                         .unwrap();
                     assert_eq!(
                         1,
