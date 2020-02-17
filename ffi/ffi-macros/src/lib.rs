@@ -52,6 +52,7 @@ macro_rules! export_nlu_parsers_c_symbols {
         pub extern "C" fn snips_nlu_parsers_extract_builtin_entities(
             ptr: *const $crate::CBuiltinEntityParser,
             sentence: *const ::libc::c_char,
+            reference_time: i64,
             filter_entity_kinds: *const ::ffi_utils::CStringArray,
             max_alternative_resolved_values: ::libc::c_uint,
             results: *mut *const snips_nlu_ontology_ffi_macros::CBuiltinEntityArray,
@@ -59,6 +60,7 @@ macro_rules! export_nlu_parsers_c_symbols {
             wrap!($crate::extract_builtin_entity_c(
                 ptr,
                 sentence,
+                reference_time,
                 filter_entity_kinds,
                 max_alternative_resolved_values,
                 results
@@ -69,6 +71,7 @@ macro_rules! export_nlu_parsers_c_symbols {
         pub extern "C" fn snips_nlu_parsers_extract_builtin_entities_json(
             ptr: *const $crate::CBuiltinEntityParser,
             sentence: *const ::libc::c_char,
+            reference_time: i64,
             filter_entity_kinds: *const ::ffi_utils::CStringArray,
             max_alternative_resolved_values: ::libc::c_uint,
             results: *mut *const ::libc::c_char,
@@ -76,6 +79,7 @@ macro_rules! export_nlu_parsers_c_symbols {
             wrap!($crate::extract_builtin_entity_json(
                 ptr,
                 sentence,
+                reference_time,
                 filter_entity_kinds,
                 max_alternative_resolved_values,
                 results
