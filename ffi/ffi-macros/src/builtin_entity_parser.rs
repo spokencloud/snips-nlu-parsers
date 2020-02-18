@@ -167,7 +167,7 @@ pub fn extract_builtin_entity(
 
     parser.extract_entities(
         sentence,
-        Some(reference_timestamp),
+        reference_time,
         opt_filters,
         max_alternative_resolved_values as usize,
     )

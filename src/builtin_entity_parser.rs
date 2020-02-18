@@ -73,7 +73,7 @@ impl BuiltinEntityParser {
     pub fn extract_entities(
         &self,
         sentence: &str,
-        reference_timestamp: Option<i64>,
+        reference_timestamp: i64,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
@@ -97,17 +97,13 @@ impl BuiltinEntityParser {
     fn _extract_entities(
         &self,
         sentence: &str,
-        reference_timestamp: Option<i64>,
+        reference_timestamp: i64,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
-        let context = reference_timestamp
-            .map(|ts|
-                ResolverContext::new(
-                    Interval::starting_at(Moment(Local.timestamp(ts, 0)),
-                                          rustling_ontology::Grain::Second))
-            )
-            .unwrap_or_else(|| ResolverContext::default());
+        let context = ResolverContext::new(Interval::starting_at(
+                    Moment(Local.timestamp(reference_timestamp, 0)),
+                    rustling_ontology::Grain::Second));
         let rustling_output_kinds = self
             .rustling_entity_kinds
             .iter()
@@ -156,7 +152,7 @@ impl BuiltinEntityParser {
     pub fn _extract_entities_for_non_space_separated(
         &self,
         sentence: &str,
-        reference_timestamp: Option<i64>,
+        reference_timestamp: i64,
         filter_entity_kinds: Option<&[BuiltinEntityKind]>,
         max_alternative_resolved_values: usize,
     ) -> Result<Vec<BuiltinEntity>> {
