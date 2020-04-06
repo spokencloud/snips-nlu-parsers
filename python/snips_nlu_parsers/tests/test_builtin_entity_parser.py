@@ -184,19 +184,19 @@ class TestBuiltinEntityParser(unittest.TestCase):
             persisted_path = str(tmpdir / "persisted_builtin_parser")
             parser.persist(persisted_path)
             loaded_parser = BuiltinEntityParser.from_path(persisted_path)
-        res = loaded_parser.parse("Raise the temperature to 9 degrees", scope=None)
+        res = loaded_parser.parse("Raise the temperature to nine degrees", scope=None)
 
         # Then
         expected_result = [
             {
-                "value": "9 degrees",
+                "value": "nine degrees",
                 "entity": {
                     "kind": "Temperature",
                     "unit": "degree",
                     "value": 9.0
                 },
                 "alternatives": [],
-                "range": {"start": 25, "end": 34},
+                "range": {"start": 25, "end": 37},
                 "entity_kind": "snips/temperature"
             }
         ]
@@ -208,19 +208,19 @@ class TestBuiltinEntityParser(unittest.TestCase):
             BUILTIN_PARSER_NO_GAZETTEER_PATH)
 
         # When
-        res = parser.parse("Raise the temperature to 9 degrees", scope=None)
+        res = parser.parse("Raise the temperature to nine degrees", scope=None)
 
         # Then
         expected_result = [
             {
-                "value": "9 degrees",
+                "value": "nine degrees",
                 "entity": {
                     "kind": "Temperature",
                     "unit": "degree",
                     "value": 9.0
                 },
                 "alternatives": [],
-                "range": {"start": 25, "end": 34},
+                "range": {"start": 25, "end": 37},
                 "entity_kind": "snips/temperature"
             }
         ]
